@@ -4,3 +4,9 @@ version = "0.1.0"
 authors = ["Michael Williams <michael.williams@enspiral.com>"]
 
 [dependencies]
+# ctrlc = { version = "3.0", features = ["termination"] }
+# ncurses = { version = "5.91.0", features = "wide" }
+
+[dependencies.ncurses]
+version = "5.91.0"
+features = ["wide"]
