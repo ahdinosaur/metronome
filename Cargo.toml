@@ -1,0 +1,6 @@
+[package]
+name = "metronome"
+version = "0.1.0"
+authors = ["Michael Williams <michael.williams@enspiral.com>"]
+
+[dependencies]
