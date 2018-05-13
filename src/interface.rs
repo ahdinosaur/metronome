@@ -72,9 +72,13 @@ impl TerminalInterface {
                     InterfaceMessage::Time(time) => {
                         ncurses::clear();
                         ncurses::mv(0, 0);
+                        if time.ticks == 0 {
+                            ncurses::printw("BEAT");
+                        }
+                        ncurses::printw("\n");
                         print_time(time);
                         print_signature(signature);
-                    }
+                    },
                     InterfaceMessage::Signature(signature) => {
                     }
                 }
@@ -91,11 +95,11 @@ pub fn print_time (time: clock::ClockTime) {
     ncurses::printw("nanos: ");
     ncurses::printw(format!("{}\n", time.nanos).as_ref());
     ncurses::printw("ticks: ");
-    ncurses::printw(format!("{}\n", time.ticks).as_ref());
+    ncurses::printw(format!("{}\n", time.ticks + 1).as_ref());
     ncurses::printw("beats: ");
-    ncurses::printw(format!("{}\n", time.beats).as_ref());
+    ncurses::printw(format!("{}\n", time.beats + 1).as_ref());
     ncurses::printw("bars: ");
-    ncurses::printw(format!("{}\n", time.bars).as_ref());
+    ncurses::printw(format!("{}\n", time.bars + 1).as_ref());
 }
 
 pub fn print_signature (signature: clock::ClockSignature) {
@@ -105,6 +109,8 @@ pub fn print_signature (signature: clock::ClockSignature) {
     ncurses::printw(format!("{}\n", signature.ticks_per_beat).as_ref());
     ncurses::printw("beats per bar: ");
     ncurses::printw(format!("{}\n", signature.beats_per_bar).as_ref());
+    ncurses::printw("bars per loop: ");
+    ncurses::printw(format!("{}\n", signature.bars_per_loop).as_ref());
 }
 
 #[derive(Clone, Copy, Debug, Hash)]

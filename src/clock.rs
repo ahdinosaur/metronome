@@ -19,12 +19,14 @@ static NANOS_PER_SECOND: u64 = 1_000_000_000;
 static BEATS_PER_MINUTE: u64 = 60;
 static DEFAULT_TICKS_PER_BEAT: u64 = 16;
 static DEFAULT_BEATS_PER_BAR: u64 = 4;
+static DEFAULT_BARS_PER_LOOP: u64 = 4;
 
 #[derive(Clone, Copy, Debug, Hash)]
 pub struct ClockSignature {
     pub nanos_per_beat: u64, // tempo
     pub ticks_per_beat: u64, // meter
-    pub beats_per_bar: u64 // meter
+    pub beats_per_bar: u64, // meter
+    pub bars_per_loop: u64,
 }
 
 impl ClockSignature {
@@ -36,7 +38,8 @@ impl ClockSignature {
         Self {
             nanos_per_beat: nanos_per_beat as u64,
             ticks_per_beat: DEFAULT_TICKS_PER_BEAT,
-            beats_per_bar: DEFAULT_BEATS_PER_BAR
+            beats_per_bar: DEFAULT_BEATS_PER_BAR,
+            bars_per_loop: DEFAULT_BARS_PER_LOOP,
         }
     }
 
@@ -61,15 +64,15 @@ impl ClockSignature {
     }
 
     pub fn nanos_to_ticks (&self, nanos: Nanos) -> u64 {
-        (nanos / self.nanos_per_tick()) as u64
+        (nanos / self.nanos_per_tick()) % self.ticks_per_beat
     }
 
     pub fn nanos_to_beats (&self, nanos: Nanos) -> u64 {
-        (nanos / self.nanos_per_beat()) as u64
+        (nanos / self.nanos_per_beat()) % self.beats_per_bar
     }
 
     pub fn nanos_to_bars (&self, nanos: Nanos) -> u64 {
-        (nanos / self.nanos_per_bar()) as u64
+        nanos / self.nanos_per_bar() % self.bars_per_loop
     }
 }
 
@@ -87,7 +90,9 @@ impl ClockTime {
             nanos,
             ticks: signature.nanos_to_ticks(nanos),
             beats: signature.nanos_to_beats(nanos),
-            bars: signature.nanos_to_bars(nanos)
+            bars: signature.nanos_to_bars(nanos),
+    //        ticks_til_beat: signature.ticks_til_beat(nanos),
+    //        beats_til_bar: signature.beats_til_bar(nanos)
         }
     }
 }
