@@ -40,6 +40,14 @@ impl ClockSignature {
         }
     }
 
+    pub fn to_beats_per_minute (&self) -> f64 {
+        let nanos_per_beat = self.nanos_per_beat;
+        let beats_per_nano = 1_f64 / self.nanos_per_beat as f64;
+        let beats_per_second = beats_per_nano * NANOS_PER_SECOND as f64;
+        let beats_per_minute = beats_per_second * SECONDS_PER_MINUTE as f64;
+        beats_per_minute
+    }
+
     pub fn nanos_per_tick (&self) -> u64 {
         (self.nanos_per_beat / self.ticks_per_beat) as u64
     }
@@ -86,9 +94,8 @@ impl ClockTime {
 
 #[derive(Debug)]
 pub struct Clock {
-    control_tx: Sender<control::ControlMessage>,
-    start_instant: Instant,
-    tick_instant: Instant,
+    start: Time,
+    tick: Time,
     signature: ClockSignature
 }
 
@@ -97,15 +104,26 @@ pub enum ClockMessage {
 }
 
 impl Clock {
-    pub fn new (signature: ClockSignature, control: &control::Control) -> Self {
-        let start_instant = Instant::now();
+    pub fn new (signature: ClockSignature) -> Self {
+        let start = Time::now();
 
         Self {
-            start_instant,
-            tick_instant: start_instant,
-            signature,
-            control_tx: control.tx.clone()
+            start,
+            tick: start,
+            signature
         }
+    }
+
+    pub fn start (signature: ClockSignature, control_tx: Sender<control::ControlMessage>) {
+        let mut clock = Self::new(signature);
+
+        spawn(move|| {
+            loop {
+                clock.tick();
+
+                control_tx.send(control::ControlMessage::Time(clock.time())).unwrap();
+            }
+        });
     }
 
     pub fn time (&self) -> ClockTime {
@@ -113,27 +131,18 @@ impl Clock {
     }
 
     pub fn diff (&self) -> ClockTime {
-        ClockTime::new(self.nanos_since_tick(), self.signature)
+        let nanos_since_tick = self.nanos_since_tick();
+        let nanos_per_tick = self.signature.nanos_per_tick();
+        let diff = nanos_per_tick - nanos_since_tick;
+        ClockTime::new(diff, self.signature)
     }
     
     pub fn nanos_since_start (&self) -> Nanos {
-        duration_to_nanos(self.start_instant.elapsed())
+        duration_to_nanos(self.start.elapsed())
     }
 
     pub fn nanos_since_tick (&self) -> Nanos {
-        duration_to_nanos(self.tick_instant.elapsed())
-    }
-
-    pub fn start (&self) {
-        let control_tx = self.control_tx.clone();
-
-        spawn(move|| {
-            loop {
-                self.tick();
-
-                control_tx.send(control::ControlMessage::Time(self.time()));
-            }
-        });
+        duration_to_nanos(self.tick.elapsed())
     }
 
     // https://github.com/BookOwl/fps_clock/blob/master/src/lib.rs
@@ -145,7 +154,7 @@ impl Clock {
         };
 
 
-        self.tick_instant = Instant::now();
+        self.tick = Time::now();
 
         diff
     }

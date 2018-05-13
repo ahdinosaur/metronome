@@ -22,6 +22,7 @@ impl Control {
 #[derive(Clone, Copy, Debug, Hash)]
 pub enum ControlMessage {
     Time(clock::ClockTime),
+    Signature(clock::ClockSignature),
     Start,
     Stop,
     TapTempo,
