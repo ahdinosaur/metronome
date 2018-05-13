@@ -7,8 +7,6 @@ use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError};
 
 use control;
 
-pub type Time = Instant;
-
 pub type Nanos = u64;
 pub type Ticks = u64;
 pub type Beats = u64;
@@ -22,7 +20,7 @@ static DEFAULT_BEATS_PER_BAR: u64 = 4;
 static DEFAULT_BARS_PER_LOOP: u64 = 4;
 static DEFAULT_BEATS_PER_MINUTE: f64 = 60_f64;
 
-#[derive(Clone, Copy, Debug, Hash)]
+#[derive(Clone, Copy, Debug)]
 pub struct ClockSignature {
     pub nanos_per_beat: u64, // tempo
     pub ticks_per_beat: u64, // meter
@@ -31,13 +29,9 @@ pub struct ClockSignature {
 }
 
 impl ClockSignature {
-    pub fn new (beats_per_minute: f64) -> Self {
-        let minutes_per_beat = 1_f64 / beats_per_minute;
-        let seconds_per_beat = minutes_per_beat * SECONDS_PER_MINUTE as f64;
-        let nanos_per_beat = seconds_per_beat * NANOS_PER_SECOND as f64;
-
+    pub fn new (nanos_per_beat: u64) -> Self {
         Self {
-            nanos_per_beat: nanos_per_beat as u64,
+            nanos_per_beat: nanos_per_beat,
             ticks_per_beat: DEFAULT_TICKS_PER_BEAT,
             beats_per_bar: DEFAULT_BEATS_PER_BAR,
             bars_per_loop: DEFAULT_BARS_PER_LOOP,
@@ -45,7 +39,14 @@ impl ClockSignature {
     }
 
     pub fn default () -> Self {
-        Self::new(DEFAULT_BEATS_PER_MINUTE)
+        Self::from_beats_per_minute(DEFAULT_BEATS_PER_MINUTE)
+    }
+
+    pub fn from_beats_per_minute (beats_per_minute: f64) -> Self {
+        let minutes_per_beat = 1_f64 / beats_per_minute;
+        let seconds_per_beat = minutes_per_beat * SECONDS_PER_MINUTE as f64;
+        let nanos_per_beat = seconds_per_beat * NANOS_PER_SECOND as f64;
+        Self::new(nanos_per_beat as u64)
     }
 
     pub fn to_beats_per_minute (&self) -> f64 {
@@ -68,6 +69,10 @@ impl ClockSignature {
         self.nanos_per_beat() * self.beats_per_bar
     }
 
+    pub fn nanos_per_loop (&self) -> u64 {
+        self.nanos_per_bar() * self.bars_per_loop
+    }
+
     pub fn nanos_to_ticks (&self, nanos: Nanos) -> u64 {
         (nanos / self.nanos_per_tick()) % self.ticks_per_beat
     }
@@ -81,48 +86,75 @@ impl ClockSignature {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
+#[derive(Clone, Copy, Debug)]
 pub struct ClockTime {
-    pub nanos: Nanos,
-    pub ticks: Ticks,
-    pub beats: Beats,
-    pub bars: Bars
+    nanos: Nanos,
+    signature: ClockSignature
 }
 
 impl ClockTime {
     pub fn new (nanos: Nanos, signature: ClockSignature) -> Self {
         Self {
             nanos,
-            ticks: signature.nanos_to_ticks(nanos),
-            beats: signature.nanos_to_beats(nanos),
-            bars: signature.nanos_to_bars(nanos),
-    //        ticks_til_beat: signature.ticks_til_beat(nanos),
-    //        beats_til_bar: signature.beats_til_bar(nanos)
+            signature
         }
+    }
+
+    pub fn nanos (&self) -> Nanos {
+        self.nanos
+    }
+
+    pub fn ticks (&self) -> Ticks {
+        self.signature.nanos_to_ticks(self.nanos)
+    }
+
+    pub fn beats (&self) -> Beats {
+        self.signature.nanos_to_beats(self.nanos)
+    }
+
+    pub fn bars (&self) -> Bars {
+        self.signature.nanos_to_bars(self.nanos)
+    }
+
+    pub fn nanos_since_loop (&self) -> Nanos {
+        self.nanos % self.signature.nanos_per_loop()
+    }
+
+    pub fn nanos_since_tick (&self) -> Nanos {
+        self.nanos % self.signature.nanos_per_tick()
+    }
+
+    pub fn nanos_since_beat (&self) -> Nanos {
+        self.nanos % self.signature.nanos_per_beat()
+    }
+
+    pub fn nanos_since_bar (&self) -> Nanos {
+        self.nanos % self.signature.nanos_per_bar()
     }
 }
 
 #[derive(Debug)]
 pub struct Clock {
-    start: Time,
-    tick: Time,
+    nanos: Nanos,
+    instant: Instant,
     signature: ClockSignature
 }
 
 pub enum ClockMessage {
-    Reset,
     NudgeTempo(f64),
-    Signature(ClockSignature)
+    Reset,
+    Signature(ClockSignature),
+    Tap,
 }
 
 impl Clock {
     pub fn new () -> Self {
-        let start = Time::now();
+        let instant = Instant::now();
         let signature = ClockSignature::default();
         
         Self {
-            start,
-            tick: start,
+            nanos: 0,
+            instant,
             signature
         }
     }
@@ -132,7 +164,7 @@ impl Clock {
 
         let (tx, rx) = channel();
 
-        control_tx.send(control::ControlMessage::Signature(ClockSignature::new(DEFAULT_BEATS_PER_MINUTE))).unwrap();
+        control_tx.send(control::ControlMessage::Signature(ClockSignature::from_beats_per_minute(DEFAULT_BEATS_PER_MINUTE))).unwrap();
 
         spawn(move|| {
             loop {
@@ -151,10 +183,25 @@ impl Clock {
                     Ok(ClockMessage::Signature(signature)) => {
                         clock.signature = signature;
                     },
+                    Ok(ClockMessage::Tap) => {
+                        // find how far off the beat we are
+                        let time = clock.time();
+                        let nanos_since_beat = time.nanos_since_beat();
+                        let nanos_per_beat = time.signature.nanos_per_beat();
+                        let nanos_per_half_beat = time.signature.nanos_per_beat() / 2;
+                        // if the beat happened recently
+                        if nanos_since_beat < nanos_per_half_beat {
+                            // nudge back to the beat
+                            clock.nanos = time.nanos - nanos_since_beat
+                        } else {
+                            // nudge to the next beat
+                            clock.nanos = time.nanos + nanos_per_beat - nanos_since_beat
+                        }
+                    },
                     Ok(ClockMessage::NudgeTempo(nudge)) => {
                         let old_beats_per_minute = clock.signature.to_beats_per_minute();
-                        let new_beats_per_minute = old_beats_per_minute - nudge;
-                        let next_signature = ClockSignature::new(new_beats_per_minute);
+                        let new_beats_per_minute = old_beats_per_minute + nudge;
+                        let next_signature = ClockSignature::from_beats_per_minute(new_beats_per_minute);
                         control_tx.send(control::ControlMessage::Signature(next_signature));
                     },
                     Err(TryRecvError::Empty) => {},
@@ -169,39 +216,38 @@ impl Clock {
     }
 
     pub fn reset (&mut self) {
-        self.start = Time::now();
+        self.nanos = 0;
+        self.instant = Instant::now();
     }
 
     pub fn time (&self) -> ClockTime {
-        ClockTime::new(self.nanos_since_start(), self.signature)
+        ClockTime::new(self.nanos_since_loop(), self.signature)
     }
 
-    pub fn diff (&self) -> ClockTime {
-        let nanos_since_tick = self.nanos_since_tick();
-        let nanos_per_tick = self.signature.nanos_per_tick();
-        let diff = nanos_per_tick - nanos_since_tick;
-        ClockTime::new(diff, self.signature)
-    }
-    
-    pub fn nanos_since_start (&self) -> Nanos {
-        duration_to_nanos(self.start.elapsed())
+    pub fn nanos_since_loop (&self) -> Nanos {
+        self.nanos % self.signature.nanos_per_loop()
     }
 
     pub fn nanos_since_tick (&self) -> Nanos {
-        duration_to_nanos(self.tick.elapsed())
+        duration_to_nanos(self.instant.elapsed())  % self.signature.nanos_per_tick()
+    }
+
+    pub fn nanos_until_tick (&self) -> Nanos {
+        let nanos_since_tick = self.nanos_since_tick();
+        let nanos_per_tick = self.signature.nanos_per_tick();
+        nanos_per_tick - nanos_since_tick
     }
 
     // https://github.com/BookOwl/fps_clock/blob/master/src/lib.rs
-    pub fn tick (&mut self) -> ClockTime {
-        let diff = self.diff();
+    pub fn tick (&mut self) -> Nanos {
+        let nanos_until_tick = self.nanos_until_tick();
 
-        if diff.nanos > 0 {
-            sleep(Duration::new(0, diff.nanos as u32))
-        };
+        sleep(Duration::new(0, nanos_until_tick as u32));
 
-        self.tick = Time::now();
+        self.nanos = self.nanos + nanos_until_tick;
+        self.instant = Instant::now();
 
-        diff
+        nanos_until_tick
     }
 }
 

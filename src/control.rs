@@ -25,10 +25,9 @@ pub enum ControlMessage {
     Signature(clock::ClockSignature),
     Reset,
     NudgeTempo(f64),
-    TapTempo
+    Tap,
     /*
     Stop,
-    SetTempo,
     NudgeClock,
     Configure
     */

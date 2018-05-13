@@ -30,6 +30,10 @@ impl Metronome {
                 control::ControlMessage::NudgeTempo(nudge) => {
                     clock_tx.send(clock::ClockMessage::NudgeTempo(nudge)).unwrap();
                 },
+                // sent by interface
+                control::ControlMessage::Tap => {
+                    clock_tx.send(clock::ClockMessage::Tap).unwrap();
+                },
                 // sent by clock
                 control::ControlMessage::Signature(signature) => {
                     clock_tx.send(clock::ClockMessage::Signature(signature)).unwrap();

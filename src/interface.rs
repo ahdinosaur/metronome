@@ -42,12 +42,12 @@ impl TerminalInterface {
                     Some(WchResult::KeyCode(ncurses::KEY_MOUSE)) => {
                     }
 
-                    Some(WchResult::KeyCode(ncurses::KEY_UP)) => { // why is up down?
-                        control_tx.send(control::ControlMessage::NudgeTempo(-1_f64)).unwrap();
+                    Some(WchResult::KeyCode(ncurses::KEY_UP)) => {
+                        control_tx.send(control::ControlMessage::NudgeTempo(1_f64)).unwrap();
                     }
 
-                    Some(WchResult::KeyCode(ncurses::KEY_DOWN)) => { // why is down up?
-                        control_tx.send(control::ControlMessage::NudgeTempo(1_f64)).unwrap();
+                    Some(WchResult::KeyCode(ncurses::KEY_DOWN)) => {
+                        control_tx.send(control::ControlMessage::NudgeTempo(-1_f64)).unwrap();
                     }
 
                     // https://github.com/jeaye/ncurses-rs/blob/master/src/constants.rs
@@ -57,7 +57,7 @@ impl TerminalInterface {
                     // Some(WchResult::KeyCode(KEY_ENTER)) => beat(),
                     Some(WchResult::Char(ch)) => {
                         if (ch == CHAR_SPACE) {
-                            control_tx.send(control::ControlMessage::TapTempo).unwrap();
+                            control_tx.send(control::ControlMessage::Tap).unwrap();
                         }
 
                         if (ch == CHAR_NEWLINE) {
@@ -99,8 +99,8 @@ impl TerminalInterface {
 }
 
 pub fn print_beat (time: clock::ClockTime) {
-    if time.ticks == 0 {
-        if time.beats == 0 {
+    if time.ticks() == 0 {
+        if time.beats() == 0 {
             ncurses::printw("SUPER ");
         }
         ncurses::printw("BEAT");
@@ -109,7 +109,7 @@ pub fn print_beat (time: clock::ClockTime) {
 }
 
 pub fn print_bar (time: clock::ClockTime) {
-    if time.bars == 0 {
+    if time.bars() == 0 {
         ncurses::printw("YAY YAY YAY");
     }
     ncurses::printw("\n");
@@ -117,13 +117,13 @@ pub fn print_bar (time: clock::ClockTime) {
 
 pub fn print_time (time: clock::ClockTime) {
     ncurses::printw("nanos: ");
-    ncurses::printw(format!("{}\n", time.nanos).as_ref());
+    ncurses::printw(format!("{}\n", time.nanos()).as_ref());
     ncurses::printw("ticks: ");
-    ncurses::printw(format!("{}\n", time.ticks + 1).as_ref());
+    ncurses::printw(format!("{}\n", time.ticks() + 1).as_ref());
     ncurses::printw("beats: ");
-    ncurses::printw(format!("{}\n", time.beats + 1).as_ref());
+    ncurses::printw(format!("{}\n", time.beats() + 1).as_ref());
     ncurses::printw("bars: ");
-    ncurses::printw(format!("{}\n", time.bars + 1).as_ref());
+    ncurses::printw(format!("{}\n", time.bars() + 1).as_ref());
 }
 
 pub fn print_signature (signature: clock::ClockSignature) {
@@ -137,7 +137,7 @@ pub fn print_signature (signature: clock::ClockSignature) {
     ncurses::printw(format!("{}\n", signature.bars_per_loop).as_ref());
 }
 
-#[derive(Clone, Copy, Debug, Hash)]
+#[derive(Clone, Copy, Debug)]
 pub enum InterfaceMessage {
     Time(clock::ClockTime),
     Signature(clock::ClockSignature),
