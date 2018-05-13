@@ -5,7 +5,8 @@ a simple metronome in rust
 _work in progress_
 
 ## usage
-install rust
+
+[install rust](https://rustup.rs/)
 
 > on debian:
 > 
@@ -21,6 +22,6 @@ cargo run
 
 controls:
 
-- press enter to reset time
+- press enter to reset loop
 - press up and down to nudge tempo
-- TODO press space to tap tempo
+- press space to tap to the beat
