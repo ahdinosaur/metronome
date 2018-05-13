@@ -3,7 +3,7 @@
 
 use std::time::{Duration, Instant};
 use std::thread::{sleep, spawn};
-use std::sync::mpsc::{channel, Sender, Receiver};
+use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError};
 
 use control;
 
@@ -20,6 +20,7 @@ static BEATS_PER_MINUTE: u64 = 60;
 static DEFAULT_TICKS_PER_BEAT: u64 = 16;
 static DEFAULT_BEATS_PER_BAR: u64 = 4;
 static DEFAULT_BARS_PER_LOOP: u64 = 4;
+static DEFAULT_BEATS_PER_MINUTE: f64 = 60_f64;
 
 #[derive(Clone, Copy, Debug, Hash)]
 pub struct ClockSignature {
@@ -41,6 +42,10 @@ impl ClockSignature {
             beats_per_bar: DEFAULT_BEATS_PER_BAR,
             bars_per_loop: DEFAULT_BARS_PER_LOOP,
         }
+    }
+
+    pub fn default () -> Self {
+        Self::new(DEFAULT_BEATS_PER_MINUTE)
     }
 
     pub fn to_beats_per_minute (&self) -> f64 {
@@ -105,13 +110,16 @@ pub struct Clock {
 }
 
 pub enum ClockMessage {
-    Time(ClockTime)
+    Reset,
+    NudgeTempo(f64),
+    Signature(ClockSignature)
 }
 
 impl Clock {
-    pub fn new (signature: ClockSignature) -> Self {
+    pub fn new () -> Self {
         let start = Time::now();
-
+        let signature = ClockSignature::default();
+        
         Self {
             start,
             tick: start,
@@ -119,16 +127,49 @@ impl Clock {
         }
     }
 
-    pub fn start (signature: ClockSignature, control_tx: Sender<control::ControlMessage>) {
-        let mut clock = Self::new(signature);
+    pub fn start (control_tx: Sender<control::ControlMessage>) -> Sender<ClockMessage> {
+        let mut clock = Self::new();
+
+        let (tx, rx) = channel();
+
+        control_tx.send(control::ControlMessage::Signature(ClockSignature::new(DEFAULT_BEATS_PER_MINUTE))).unwrap();
 
         spawn(move|| {
             loop {
-                clock.tick();
+                // wait a tick
+                let diff = clock.tick();
 
+                // send clock time
                 control_tx.send(control::ControlMessage::Time(clock.time())).unwrap();
+
+                // handle any incoming messages
+                let message_result = rx.try_recv();
+                match message_result {
+                    Ok(ClockMessage::Reset) => {
+                        clock.reset();
+                    },
+                    Ok(ClockMessage::Signature(signature)) => {
+                        clock.signature = signature;
+                    },
+                    Ok(ClockMessage::NudgeTempo(nudge)) => {
+                        let old_beats_per_minute = clock.signature.to_beats_per_minute();
+                        let new_beats_per_minute = old_beats_per_minute - nudge;
+                        let next_signature = ClockSignature::new(new_beats_per_minute);
+                        control_tx.send(control::ControlMessage::Signature(next_signature));
+                    },
+                    Err(TryRecvError::Empty) => {},
+                    Err(TryRecvError::Disconnected) => {
+                        panic!("{:?}", TryRecvError::Disconnected);
+                    }
+                }
             }
         });
+
+        tx
+    }
+
+    pub fn reset (&mut self) {
+        self.start = Time::now();
     }
 
     pub fn time (&self) -> ClockTime {

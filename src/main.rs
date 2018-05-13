@@ -9,28 +9,35 @@ fn main () {
 }
 
 
-pub type Bpm = f64;
+pub type Tempo = f64;
 
-struct Metronome {
-    pub bpm: Bpm
-}
+struct Metronome {}
 
 impl Metronome {
-    pub fn run (bpm: Bpm) {
+    pub fn run (tempo: Tempo) {
         let control = control::Control::new();
 
-        let clock_signature = clock::ClockSignature::new(bpm);
-
-        let clock = clock::Clock::start(clock_signature, control.tx.clone());
-        let terminal_interface = interface::TerminalInterface::start(clock_signature, control.tx.clone());
+        let terminal_tx = interface::TerminalInterface::start(control.tx.clone());
+        let clock_tx = clock::Clock::start(control.tx.clone());
 
         for control_message in control.rx {
             match control_message {
-                control::ControlMessage::Signature(signature) => {
-                    terminal_interface.tx.send(interface::InterfaceMessage::Signature(signature)).unwrap();
+                // sent by interface
+                control::ControlMessage::Reset => {
+                    clock_tx.send(clock::ClockMessage::Reset).unwrap();
                 },
+                // sent by interface
+                control::ControlMessage::NudgeTempo(nudge) => {
+                    clock_tx.send(clock::ClockMessage::NudgeTempo(nudge)).unwrap();
+                },
+                // sent by clock
+                control::ControlMessage::Signature(signature) => {
+                    clock_tx.send(clock::ClockMessage::Signature(signature)).unwrap();
+                    terminal_tx.send(interface::InterfaceMessage::Signature(signature)).unwrap();
+                },
+                // sent by clock
                 control::ControlMessage::Time(time) => {
-                    terminal_interface.tx.send(interface::InterfaceMessage::Time(time)).unwrap();
+                    terminal_tx.send(interface::InterfaceMessage::Time(time)).unwrap();
                 },
                 _ => {}
             }

@@ -13,17 +13,13 @@ static CHAR_RETURN: u32 = 0x000D;
 static CHAR_NEWLINE: u32 = 0x000A;
 
 #[derive(Debug)]
-pub struct TerminalInterface {
-    pub tx: Sender<InterfaceMessage>
-}
+pub struct TerminalInterface {}
 
 impl TerminalInterface {
-    pub fn start (signature: clock::ClockSignature, control_tx: Sender<control::ControlMessage>) -> Self {
+    pub fn start (control_tx: Sender<control::ControlMessage>) -> Sender<InterfaceMessage> {
         let (tx, rx) = channel();
 
-        let interface = Self {
-            tx
-        };
+        let mut signature = clock::ClockSignature::default();
 
         spawn(move|| {
             /* Setup ncurses. */
@@ -44,16 +40,28 @@ impl TerminalInterface {
 
                 match ch {
                     Some(WchResult::KeyCode(ncurses::KEY_MOUSE)) => {
-                        control_tx.send(control::ControlMessage::TapTempo).unwrap();
+                    }
+
+                    Some(WchResult::KeyCode(ncurses::KEY_UP)) => { // why is up down?
+                        control_tx.send(control::ControlMessage::NudgeTempo(-1_f64)).unwrap();
+                    }
+
+                    Some(WchResult::KeyCode(ncurses::KEY_DOWN)) => { // why is down up?
+                        control_tx.send(control::ControlMessage::NudgeTempo(1_f64)).unwrap();
                     }
 
                     // https://github.com/jeaye/ncurses-rs/blob/master/src/constants.rs
-                    Some(WchResult::KeyCode(_)) => {}
+                    Some(WchResult::KeyCode(_)) => {
+                    }
 
                     // Some(WchResult::KeyCode(KEY_ENTER)) => beat(),
                     Some(WchResult::Char(ch)) => {
-                        if (ch == CHAR_SPACE || ch == CHAR_NEWLINE) {
+                        if (ch == CHAR_SPACE) {
                             control_tx.send(control::ControlMessage::TapTempo).unwrap();
+                        }
+
+                        if (ch == CHAR_NEWLINE) {
+                            control_tx.send(control::ControlMessage::Reset).unwrap();
                         }
                     }
 
@@ -77,7 +85,8 @@ impl TerminalInterface {
                         print_time(time);
                         print_signature(signature);
                     },
-                    InterfaceMessage::Signature(signature) => {
+                    InterfaceMessage::Signature(next_signature) => {
+                        signature = next_signature;
                     }
                 }
 
@@ -85,7 +94,7 @@ impl TerminalInterface {
             }
         });
 
-        interface
+        tx
     }
 }
 

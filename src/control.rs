@@ -19,15 +19,18 @@ impl Control {
     }
 }
 
-#[derive(Clone, Copy, Debug, Hash)]
+#[derive(Clone, Copy, Debug)]
 pub enum ControlMessage {
     Time(clock::ClockTime),
     Signature(clock::ClockSignature),
-    Start,
+    Reset,
+    NudgeTempo(f64),
+    TapTempo
+    /*
     Stop,
-    TapTempo,
     SetTempo,
     NudgeClock,
     Configure
+    */
 }
 
