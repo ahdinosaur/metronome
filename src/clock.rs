@@ -1,6 +1,7 @@
 // inspired by https://github.com/mmckegg/rust-loop-drop/blob/master/src/midi_time.rs
 // http://www.deluge.co/?q=midi-tempo-bpm
 
+use std::u64;
 use std::time::{Duration, Instant};
 use std::thread::{sleep, spawn};
 use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError};
@@ -135,8 +136,9 @@ impl ClockTime {
 
 #[derive(Debug)]
 pub struct Clock {
+    tick: Instant,
+    tap: Option<Instant>,
     nanos: Nanos,
-    instant: Instant,
     signature: ClockSignature
 }
 
@@ -149,12 +151,13 @@ pub enum ClockMessage {
 
 impl Clock {
     pub fn new () -> Self {
-        let instant = Instant::now();
+        let tick = Instant::now();
         let signature = ClockSignature::default();
         
         Self {
             nanos: 0,
-            instant,
+            tap: None,
+            tick,
             signature
         }
     }
@@ -197,6 +200,20 @@ impl Clock {
                             // nudge to the next beat
                             clock.nanos = time.nanos + nanos_per_beat - nanos_since_beat
                         }
+
+                        // if second tap on beat, adjust tempo
+                        match clock.tap {
+                            Some(tap) => {
+                                let tap_diff = duration_to_nanos(tap.elapsed());
+                                if tap_diff < (nanos_per_beat * 2) {
+                                    let next_signature = ClockSignature::new(tap_diff);
+                                    control_tx.send(control::ControlMessage::Signature(next_signature));
+                                }
+                            },
+                            None => {}
+                        }
+
+                        clock.tap = Some(Instant::now());
                     },
                     Ok(ClockMessage::NudgeTempo(nudge)) => {
                         let old_beats_per_minute = clock.signature.to_beats_per_minute();
@@ -217,7 +234,8 @@ impl Clock {
 
     pub fn reset (&mut self) {
         self.nanos = 0;
-        self.instant = Instant::now();
+        self.tick = Instant::now();
+        self.tap = None;
     }
 
     pub fn time (&self) -> ClockTime {
@@ -229,7 +247,7 @@ impl Clock {
     }
 
     pub fn nanos_since_tick (&self) -> Nanos {
-        duration_to_nanos(self.instant.elapsed())  % self.signature.nanos_per_tick()
+        duration_to_nanos(self.tick.elapsed())  % self.signature.nanos_per_tick()
     }
 
     pub fn nanos_until_tick (&self) -> Nanos {
@@ -245,7 +263,7 @@ impl Clock {
         sleep(Duration::new(0, nanos_until_tick as u32));
 
         self.nanos = self.nanos + nanos_until_tick;
-        self.instant = Instant::now();
+        self.tick = Instant::now();
 
         nanos_until_tick
     }
