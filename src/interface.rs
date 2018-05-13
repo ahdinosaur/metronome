@@ -72,10 +72,8 @@ impl TerminalInterface {
                     InterfaceMessage::Time(time) => {
                         ncurses::clear();
                         ncurses::mv(0, 0);
-                        if time.ticks == 0 {
-                            ncurses::printw("BEAT");
-                        }
-                        ncurses::printw("\n");
+                        print_beat(time);
+                        print_bar(time);
                         print_time(time);
                         print_signature(signature);
                     },
@@ -89,6 +87,23 @@ impl TerminalInterface {
 
         interface
     }
+}
+
+pub fn print_beat (time: clock::ClockTime) {
+    if time.ticks == 0 {
+        if time.beats == 0 {
+            ncurses::printw("SUPER ");
+        }
+        ncurses::printw("BEAT");
+    }
+    ncurses::printw("\n");
+}
+
+pub fn print_bar (time: clock::ClockTime) {
+    if time.bars == 0 {
+        ncurses::printw("YAY YAY YAY");
+    }
+    ncurses::printw("\n");
 }
 
 pub fn print_time (time: clock::ClockTime) {

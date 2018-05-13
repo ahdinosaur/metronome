@@ -158,7 +158,6 @@ impl Clock {
             sleep(Duration::new(0, diff.nanos as u32))
         };
 
-
         self.tick = Time::now();
 
         diff
