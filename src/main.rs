@@ -68,15 +68,11 @@ fn main () {
 
 fn clock () {
     spawn(move|| {
-        let time_signature = clock::TimeSignature {
-            nanos_per_beat: BEATS_PER_MINUTE / SECONDS_PER_MINUTE * NANOS_PER_SECOND,
-            ticks_per_beat: DEFAULT_TICKS_PER_BEAT,
-            beats_per_measure: DEFAULT_BEATS_PER_MEASURE
-        };
-        let mut clock = clock::Clock::new(time_signature);
+        let signature = clock::ClockSignature::new(60_f64);
+        let mut clock = clock::Clock::new(signature);
         loop {
             clock.tick();
-            println!("{:?}", clock.get_time());
+            println!("{:?}", clock.time());
         }
     });
 }
