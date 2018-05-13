@@ -2,7 +2,10 @@
 // http://www.deluge.co/?q=midi-tempo-bpm
 
 use std::time::{Duration, Instant};
-use std::thread::{sleep};
+use std::thread::{sleep, spawn};
+use std::sync::mpsc::{channel, Sender, Receiver};
+
+use control;
 
 pub type Time = Instant;
 
@@ -19,9 +22,9 @@ static DEFAULT_BEATS_PER_BAR: u64 = 4;
 
 #[derive(Clone, Copy, Debug, Hash)]
 pub struct ClockSignature {
-    nanos_per_beat: u64, // tempo
-    ticks_per_beat: u64, // meter
-    beats_per_bar: u64 // meter
+    pub nanos_per_beat: u64, // tempo
+    pub ticks_per_beat: u64, // meter
+    pub beats_per_bar: u64 // meter
 }
 
 impl ClockSignature {
@@ -64,10 +67,10 @@ impl ClockSignature {
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
 pub struct ClockTime {
-    nanos: Nanos,
-    ticks: Ticks,
-    beats: Beats,
-    bars: Bars
+    pub nanos: Nanos,
+    pub ticks: Ticks,
+    pub beats: Beats,
+    pub bars: Bars
 }
 
 impl ClockTime {
@@ -81,24 +84,27 @@ impl ClockTime {
     }
 }
 
-#[derive(Clone, Copy, Debug, Hash)]
+#[derive(Debug)]
 pub struct Clock {
+    control_tx: Sender<control::ControlMessage>,
     start_instant: Instant,
     tick_instant: Instant,
     signature: ClockSignature
 }
 
-pub struct ClockMessage {
+pub enum ClockMessage {
+    Time(ClockTime)
 }
 
 impl Clock {
-    pub fn new (signature: ClockSignature) -> Self {
+    pub fn new (signature: ClockSignature, control: &control::Control) -> Self {
         let start_instant = Instant::now();
 
         Self {
             start_instant,
             tick_instant: start_instant,
-            signature
+            signature,
+            control_tx: control.tx.clone()
         }
     }
 
@@ -116,6 +122,18 @@ impl Clock {
 
     pub fn nanos_since_tick (&self) -> Nanos {
         duration_to_nanos(self.tick_instant.elapsed())
+    }
+
+    pub fn start (&self) {
+        let control_tx = self.control_tx.clone();
+
+        spawn(move|| {
+            loop {
+                self.tick();
+
+                control_tx.send(control::ControlMessage::Time(self.time()));
+            }
+        });
     }
 
     // https://github.com/BookOwl/fps_clock/blob/master/src/lib.rs

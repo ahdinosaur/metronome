@@ -1,56 +1,13 @@
-/*
-use std::io;
-use std::io::prelude::*;
-
-use std::sync::mpsc;
-use std::thread::sleep;
-use std::time::{Duration};
-
-fn main () {
-    let metronome = Metronone::new();
-    metronome().unwrap();
-}
-
-pub struct Metronone {}
-
-impl Metronome () {
-    pub fn new () -> <()> {
-        let stdin = io::stdin();
-        let mut buffer = vec![0_u8; 2_usize.pow(8)];
-
-        loop {
-            let mut handle = stdin.lock();
-            match handle.read(&mut buffer) {
-                Ok(num_bytes) => {
-                    println!("{} bytes read", num_bytes);
-                    let string = String::from_utf8(buffer.clone()).unwrap();
-                },
-                Err(error) => println!("error: {}", error),
-            }
-
-            sleep(Duration::new(0, 30 * 1000 * 1000));
-        }
-    }
-*/
-
-/*
-    Copyright © 2013 Free Software Foundation, Inc
-    See licensing in LICENSE file
-    File: examples/ex_7.rs
-    Author: Jesse 'Jeaye' Wilkerson
-    Description:
-      Basic input and attribute example, using the Unicode-aware get_wch functions.
-*/
-
 extern crate ncurses;
-// extern crate ctrlc;
 
-use std::char;
 use ncurses::{WchResult};
-use std::thread::{sleep,spawn};
+use std::char;
+use std::sync::mpsc::{channel, Sender, Receiver};
+use std::thread::{sleep, spawn};
 use std::time::{Duration};
 
 mod clock;
+mod control;
 
 // https://unicode.org/charts/PDF/U0000.pdf
 static CHAR_SPACE: u32 = 0x0020;
@@ -58,70 +15,111 @@ static CHAR_RETURN: u32 = 0x000D;
 static CHAR_NEWLINE: u32 = 0x000A;
 
 fn main () {
-    clock();
-    // terminal_interface();
+    let control = control::Control::new();
+
+    let clock_signature = clock::ClockSignature::new(60_f64);
+    let mut clock = clock::Clock::new(clock_signature, &control);
+
+    clock.start();
+
+    let terminal_interface = TerminalInterface::new(&control);
     
-    loop {
-        sleep(Duration::new(10, 0));
+    terminal_interface.start();
+
+    for control_message in control.rx {
+        match control_message {
+            control::ControlMessage::Time(time) => {
+                terminal_interface.tx.send(InterfaceMessage::Time(time));
+            }
+        }
     }
 }
 
-fn clock () {
-    spawn(move|| {
-        let signature = clock::ClockSignature::new(60_f64);
-        let mut clock = clock::Clock::new(signature);
-        loop {
-            clock.tick();
-            println!("{:?}", clock.time());
-        }
-    });
+#[derive(Debug)]
+pub struct TerminalInterface {
+    control_tx: Sender<control::ControlMessage>,
+    tx: Sender<InterfaceMessage>,
+    rx: Receiver<InterfaceMessage>
 }
 
-fn terminal_interface () {
-    spawn(move|| {
-        let locale_conf = ncurses::LcCategory::all;
-        ncurses::setlocale(locale_conf, "en_US.UTF-8");
+impl TerminalInterface {
+    pub fn new (control: &control::Control) -> Self {
+        let (tx, rx) = channel();
+        
+        Self {
+            control_tx: control.tx.clone(),
+            tx,
+            rx
+        }
+    }
 
-        /* Setup ncurses. */
-        ncurses::initscr();
+    pub fn start (&self) {
+        let control_tx = self.control_tx.clone();
 
-        /* Enable mouse events. */
-        ncurses::mousemask(ncurses::ALL_MOUSE_EVENTS as ncurses::mmask_t, None);
+        spawn(move|| {
+            /* Setup ncurses. */
+            ncurses::initscr();
 
-        /* Allow for extended keyboard (like F1). */
-        ncurses::keypad(ncurses::stdscr(), true);
-        ncurses::noecho();
+            let locale_conf = ncurses::LcCategory::all;
+            ncurses::setlocale(locale_conf, "en_US.UTF-8");
 
-        loop {
-            let ch = ncurses::wget_wch(ncurses::stdscr());
+            /* Enable mouse events. */
+            ncurses::mousemask(ncurses::ALL_MOUSE_EVENTS as ncurses::mmask_t, None);
 
-            match ch {
-                Some(WchResult::KeyCode(ncurses::KEY_MOUSE)) => {
-                    tap();
+            /* Allow for extended keyboard (like F1). */
+            ncurses::keypad(ncurses::stdscr(), true);
+            ncurses::noecho();
+
+            loop {
+                let ch = ncurses::wget_wch(ncurses::stdscr());
+
+                match ch {
+                    Some(WchResult::KeyCode(ncurses::KEY_MOUSE)) => {
+                        control_tx.send(control::ControlMessage::TapTempo).unwrap();
+                    }
+
+                    // https://github.com/jeaye/ncurses-rs/blob/master/src/constants.rs
+                    Some(WchResult::KeyCode(_)) => {}
+
+                    // Some(WchResult::KeyCode(KEY_ENTER)) => beat(),
+                    Some(WchResult::Char(ch)) => {
+                        if (ch == CHAR_SPACE || ch == CHAR_NEWLINE) {
+                            control_tx.send(control::ControlMessage::TapTempo).unwrap();
+                        }
+                    }
+
+                    None => {}
                 }
 
-                // https://github.com/jeaye/ncurses-rs/blob/master/src/constants.rs
-                Some(WchResult::KeyCode(_)) => {}
+                ncurses::refresh();
+            }
 
-                // Some(WchResult::KeyCode(KEY_ENTER)) => beat(),
-                Some(WchResult::Char(ch)) => {
-                    if (ch == CHAR_SPACE || ch == CHAR_NEWLINE) {
-                        tap();
+            ncurses::endwin();
+        });
+
+        spawn(move|| {
+            for interface_message in self.rx {
+                match interface_message {
+                    InterfaceMessage::Time(time) => {
+                        print_time(time);
                     }
                 }
 
-                None => {}
             }
-
-            ncurses::refresh();
-        }
-
-        ncurses::endwin();
-    });
+        });
+    }
 }
 
-fn tap () {
-    ncurses::attron(ncurses::A_BOLD());
-    ncurses::printw("\nBeat");
-    ncurses::attroff(ncurses::A_BOLD());
+pub fn print_time (time: clock::ClockTime) {
+    ncurses::clear();
+    ncurses::mv(0, 0);
+    ncurses::printw("nanos: ");
+    ncurses::printw(format!("{}\n", time.nanos).as_ref());
+    ncurses::printw("\nticks: ");
+    ncurses::printw(format!("{}\n", time.ticks).as_ref());
+}
+
+#[derive(Clone, Copy, Debug, Hash)]
+pub enum InterfaceMessage {
+    Time(clock::ClockTime)
 }
