@@ -47,64 +47,81 @@ extern crate ncurses;
 
 use std::char;
 use ncurses::{WchResult};
-// use std::sync::atomic::{AtomicBool, Ordering};
-// use std::sync::Arc;
+use std::thread::{sleep,spawn};
+use std::time::{Duration};
 
+mod clock;
 
 // https://unicode.org/charts/PDF/U0000.pdf
 static CHAR_SPACE: u32 = 0x0020;
 static CHAR_RETURN: u32 = 0x000D;
 static CHAR_NEWLINE: u32 = 0x000A;
 
-fn main() {
-    // let locale_conf = LcCategory::all;
-    // setlocale(locale_conf, "en_US.UTF-8");
-
-    /* Setup ncurses. */
-    ncurses::initscr();
-
-    /* Enable mouse events. */
-    ncurses::mousemask(ncurses::ALL_MOUSE_EVENTS as ncurses::mmask_t, None);
-
-    /* Allow for extended keyboard (like F1). */
-    ncurses::keypad(ncurses::stdscr(), true);
-    ncurses::noecho();
-
-
-    /*
-    let running = Arc::new(AtomicBool::new(true));
-    let r = running.clone();
-    ctrlc::set_handler(move || {
-        r.store(false, Ordering::SeqCst);
-    }).expect("Error setting Ctrl-C handler");
-
-    while running.load(Ordering::SeqCst) {
-    */
+fn main () {
+    clock();
+    // terminal_interface();
+    
     loop {
-        let ch = ncurses::wget_wch(ncurses::stdscr());
+        sleep(Duration::new(10, 0));
+    }
+}
 
-        match ch {
-            Some(WchResult::KeyCode(ncurses::KEY_MOUSE)) => {
-                tap();
-            }
+fn clock () {
+    spawn(move|| {
+        let time_signature = clock::TimeSignature {
+            nanos_per_beat: BEATS_PER_MINUTE / SECONDS_PER_MINUTE * NANOS_PER_SECOND,
+            ticks_per_beat: DEFAULT_TICKS_PER_BEAT,
+            beats_per_measure: DEFAULT_BEATS_PER_MEASURE
+        };
+        let mut clock = clock::Clock::new(time_signature);
+        loop {
+            clock.tick();
+            println!("{:?}", clock.get_time());
+        }
+    });
+}
 
-            // https://github.com/jeaye/ncurses-rs/blob/master/src/constants.rs
-            Some(WchResult::KeyCode(_)) => {}
+fn terminal_interface () {
+    spawn(move|| {
+        let locale_conf = ncurses::LcCategory::all;
+        ncurses::setlocale(locale_conf, "en_US.UTF-8");
 
-            // Some(WchResult::KeyCode(KEY_ENTER)) => beat(),
-            Some(WchResult::Char(ch)) => {
-                if (ch == CHAR_SPACE || ch == CHAR_NEWLINE) {
+        /* Setup ncurses. */
+        ncurses::initscr();
+
+        /* Enable mouse events. */
+        ncurses::mousemask(ncurses::ALL_MOUSE_EVENTS as ncurses::mmask_t, None);
+
+        /* Allow for extended keyboard (like F1). */
+        ncurses::keypad(ncurses::stdscr(), true);
+        ncurses::noecho();
+
+        loop {
+            let ch = ncurses::wget_wch(ncurses::stdscr());
+
+            match ch {
+                Some(WchResult::KeyCode(ncurses::KEY_MOUSE)) => {
                     tap();
                 }
+
+                // https://github.com/jeaye/ncurses-rs/blob/master/src/constants.rs
+                Some(WchResult::KeyCode(_)) => {}
+
+                // Some(WchResult::KeyCode(KEY_ENTER)) => beat(),
+                Some(WchResult::Char(ch)) => {
+                    if (ch == CHAR_SPACE || ch == CHAR_NEWLINE) {
+                        tap();
+                    }
+                }
+
+                None => {}
             }
 
-            None => {}
+            ncurses::refresh();
         }
 
-        ncurses::refresh();
-    }
-
-    ncurses::endwin();
+        ncurses::endwin();
+    });
 }
 
 fn tap () {
