@@ -5,7 +5,7 @@ use std::sync::mpsc::{channel, Sender, Receiver};
 use std::thread::{sleep, spawn};
 
 use clock;
-use control;
+use metronome;
 
 // https://unicode.org/charts/PDF/U0000.pdf
 static CHAR_SPACE: u32 = 0x0020;
@@ -13,13 +13,13 @@ static CHAR_RETURN: u32 = 0x000D;
 static CHAR_NEWLINE: u32 = 0x000A;
 
 #[derive(Debug)]
-pub struct TerminalInterface {}
+pub struct Terminal {}
 
-impl TerminalInterface {
-    pub fn start (control_tx: Sender<control::ControlMessage>) -> Sender<InterfaceMessage> {
+impl Terminal {
+    pub fn start (metronome_tx: Sender<metronome::Message>) -> Sender<Message> {
         let (tx, rx) = channel();
 
-        let mut signature = clock::ClockSignature::default();
+        let mut signature = clock::Signature::default();
 
         spawn(move|| {
             /* Setup ncurses. */
@@ -43,11 +43,11 @@ impl TerminalInterface {
                     }
 
                     Some(WchResult::KeyCode(ncurses::KEY_UP)) => {
-                        control_tx.send(control::ControlMessage::NudgeTempo(1_f64)).unwrap();
+                        metronome_tx.send(metronome::Message::NudgeTempo(1_f64)).unwrap();
                     }
 
                     Some(WchResult::KeyCode(ncurses::KEY_DOWN)) => {
-                        control_tx.send(control::ControlMessage::NudgeTempo(-1_f64)).unwrap();
+                        metronome_tx.send(metronome::Message::NudgeTempo(-1_f64)).unwrap();
                     }
 
                     // https://github.com/jeaye/ncurses-rs/blob/master/src/constants.rs
@@ -57,11 +57,11 @@ impl TerminalInterface {
                     // Some(WchResult::KeyCode(KEY_ENTER)) => beat(),
                     Some(WchResult::Char(ch)) => {
                         if (ch == CHAR_SPACE) {
-                            control_tx.send(control::ControlMessage::Tap).unwrap();
+                            metronome_tx.send(metronome::Message::Tap).unwrap();
                         }
 
                         if (ch == CHAR_NEWLINE) {
-                            control_tx.send(control::ControlMessage::Reset).unwrap();
+                            metronome_tx.send(metronome::Message::Reset).unwrap();
                         }
                     }
 
@@ -77,7 +77,7 @@ impl TerminalInterface {
         spawn(move|| {
             for interface_message in rx {
                 match interface_message {
-                    InterfaceMessage::Time(time) => {
+                    Message::Time(time) => {
                         ncurses::clear();
                         ncurses::mv(0, 0);
                         print_beat(time);
@@ -85,7 +85,7 @@ impl TerminalInterface {
                         print_time(time);
                         print_signature(signature);
                     },
-                    InterfaceMessage::Signature(next_signature) => {
+                    Message::Signature(next_signature) => {
                         signature = next_signature;
                     }
                 }
@@ -98,7 +98,7 @@ impl TerminalInterface {
     }
 }
 
-pub fn print_beat (time: clock::ClockTime) {
+pub fn print_beat (time: clock::Time) {
     if time.ticks() == 0 {
         if time.beats() == 0 {
             ncurses::printw("SUPER ");
@@ -108,14 +108,14 @@ pub fn print_beat (time: clock::ClockTime) {
     ncurses::printw("\n");
 }
 
-pub fn print_bar (time: clock::ClockTime) {
+pub fn print_bar (time: clock::Time) {
     if time.bars() == 0 {
         ncurses::printw("YAY YAY YAY");
     }
     ncurses::printw("\n");
 }
 
-pub fn print_time (time: clock::ClockTime) {
+pub fn print_time (time: clock::Time) {
     ncurses::printw("nanos: ");
     ncurses::printw(format!("{}\n", time.nanos()).as_ref());
     ncurses::printw("ticks: ");
@@ -126,7 +126,7 @@ pub fn print_time (time: clock::ClockTime) {
     ncurses::printw(format!("{}\n", time.bars() + 1).as_ref());
 }
 
-pub fn print_signature (signature: clock::ClockSignature) {
+pub fn print_signature (signature: clock::Signature) {
     ncurses::printw("beats per minute: ");
     ncurses::printw(format!("{}\n", signature.to_beats_per_minute()).as_ref());
     ncurses::printw("ticks per beat: ");
@@ -138,7 +138,7 @@ pub fn print_signature (signature: clock::ClockSignature) {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub enum InterfaceMessage {
-    Time(clock::ClockTime),
-    Signature(clock::ClockSignature),
+pub enum Message {
+    Time(clock::Time),
+    Signature(clock::Signature),
 }

@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use std::thread::{sleep, spawn};
 use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError};
 
-use control;
+use metronome;
 
 pub type Nanos = u64;
 pub type Ticks = u64;
@@ -22,14 +22,14 @@ static DEFAULT_BARS_PER_LOOP: u64 = 4;
 static DEFAULT_BEATS_PER_MINUTE: f64 = 60_f64;
 
 #[derive(Clone, Copy, Debug)]
-pub struct ClockSignature {
+pub struct Signature {
     pub nanos_per_beat: u64, // tempo
     pub ticks_per_beat: u64, // meter
     pub beats_per_bar: u64, // meter
     pub bars_per_loop: u64,
 }
 
-impl ClockSignature {
+impl Signature {
     pub fn new (nanos_per_beat: u64) -> Self {
         Self {
             nanos_per_beat: nanos_per_beat,
@@ -88,13 +88,13 @@ impl ClockSignature {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct ClockTime {
+pub struct Time {
     nanos: Nanos,
-    signature: ClockSignature
+    signature: Signature
 }
 
-impl ClockTime {
-    pub fn new (nanos: Nanos, signature: ClockSignature) -> Self {
+impl Time {
+    pub fn new (nanos: Nanos, signature: Signature) -> Self {
         Self {
             nanos,
             signature
@@ -139,20 +139,20 @@ pub struct Clock {
     tick: Instant,
     tap: Option<Instant>,
     nanos: Nanos,
-    signature: ClockSignature
+    signature: Signature
 }
 
-pub enum ClockMessage {
+pub enum Message {
     NudgeTempo(f64),
     Reset,
-    Signature(ClockSignature),
+    Signature(Signature),
     Tap,
 }
 
 impl Clock {
     pub fn new () -> Self {
         let tick = Instant::now();
-        let signature = ClockSignature::default();
+        let signature = Signature::default();
         
         Self {
             nanos: 0,
@@ -162,12 +162,12 @@ impl Clock {
         }
     }
 
-    pub fn start (control_tx: Sender<control::ControlMessage>) -> Sender<ClockMessage> {
+    pub fn start (metronome_tx: Sender<metronome::Message>) -> Sender<Message> {
         let mut clock = Self::new();
 
         let (tx, rx) = channel();
 
-        control_tx.send(control::ControlMessage::Signature(ClockSignature::from_beats_per_minute(DEFAULT_BEATS_PER_MINUTE))).unwrap();
+        metronome_tx.send(metronome::Message::Signature(Signature::from_beats_per_minute(DEFAULT_BEATS_PER_MINUTE))).unwrap();
 
         spawn(move|| {
             loop {
@@ -175,18 +175,18 @@ impl Clock {
                 let diff = clock.tick();
 
                 // send clock time
-                control_tx.send(control::ControlMessage::Time(clock.time())).unwrap();
+                metronome_tx.send(metronome::Message::Time(clock.time())).unwrap();
 
                 // handle any incoming messages
                 let message_result = rx.try_recv();
                 match message_result {
-                    Ok(ClockMessage::Reset) => {
+                    Ok(Message::Reset) => {
                         clock.reset();
                     },
-                    Ok(ClockMessage::Signature(signature)) => {
+                    Ok(Message::Signature(signature)) => {
                         clock.signature = signature;
                     },
-                    Ok(ClockMessage::Tap) => {
+                    Ok(Message::Tap) => {
                         // find how far off the beat we are
                         let time = clock.time();
                         let nanos_since_beat = time.nanos_since_beat();
@@ -206,8 +206,8 @@ impl Clock {
                             Some(tap) => {
                                 let tap_diff = duration_to_nanos(tap.elapsed());
                                 if tap_diff < (nanos_per_beat * 2) {
-                                    let next_signature = ClockSignature::new(tap_diff);
-                                    control_tx.send(control::ControlMessage::Signature(next_signature));
+                                    let next_signature = Signature::new(tap_diff);
+                                    metronome_tx.send(metronome::Message::Signature(next_signature));
                                 }
                             },
                             None => {}
@@ -215,11 +215,11 @@ impl Clock {
 
                         clock.tap = Some(Instant::now());
                     },
-                    Ok(ClockMessage::NudgeTempo(nudge)) => {
+                    Ok(Message::NudgeTempo(nudge)) => {
                         let old_beats_per_minute = clock.signature.to_beats_per_minute();
                         let new_beats_per_minute = old_beats_per_minute + nudge;
-                        let next_signature = ClockSignature::from_beats_per_minute(new_beats_per_minute);
-                        control_tx.send(control::ControlMessage::Signature(next_signature));
+                        let next_signature = Signature::from_beats_per_minute(new_beats_per_minute);
+                        metronome_tx.send(metronome::Message::Signature(next_signature));
                     },
                     Err(TryRecvError::Empty) => {},
                     Err(TryRecvError::Disconnected) => {
@@ -238,8 +238,8 @@ impl Clock {
         self.tap = None;
     }
 
-    pub fn time (&self) -> ClockTime {
-        ClockTime::new(self.nanos_since_loop(), self.signature)
+    pub fn time (&self) -> Time {
+        Time::new(self.nanos_since_loop(), self.signature)
     }
 
     pub fn nanos_since_loop (&self) -> Nanos {
@@ -274,15 +274,15 @@ fn duration_to_nanos (duration: Duration) -> Nanos {
 }
 
 /*
-pub fn nanos_from_ticks (ticks: Ticks, signature: ClockSignature) -> Nanos {
+pub fn nanos_from_ticks (ticks: Ticks, signature: Signature) -> Nanos {
     ticks * signature.nanos_per_beat
 }
 
-pub fn ticks_from_beats (beats: Beats, signature: ClockSignature) -> Ticks {
+pub fn ticks_from_beats (beats: Beats, signature: Signature) -> Ticks {
     beats * signature.ticks_per_beat
 }
 
-pub fn ticks_from_measure (measures: Measures, signature: ClockSignature) -> Ticks {
+pub fn ticks_from_measure (measures: Measures, signature: Signature) -> Ticks {
     measures * signature.beats_per_measure * signature.ticks_per_beat
 }
 */

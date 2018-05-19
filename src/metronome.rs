@@ -1,0 +1,69 @@
+use std::sync::mpsc::{channel, Sender, Receiver};
+
+use clock;
+use interface;
+
+pub type Tempo = f64;
+
+#[derive(Clone, Copy, Debug)]
+pub enum Message {
+    Time(clock::Time),
+    Signature(clock::Signature),
+    Reset,
+    NudgeTempo(f64),
+    Tap,
+    /*
+    Stop,
+    NudgeClock,
+    Configure
+    */
+}
+
+#[derive(Debug)]
+pub struct Metronome {
+    pub tx: Sender<Message>,
+    pub rx: Receiver<Message>
+}
+
+impl Metronome {
+    pub fn new() -> Self {
+        let (tx, rx) = channel();
+        
+        Self {
+            tx,
+            rx
+        }
+    }
+
+    pub fn run (self) {
+        let terminal_tx = interface::Terminal::start(self.tx.clone());
+        let clock_tx = clock::Clock::start(self.tx.clone());
+
+        for control_message in self.rx {
+            match control_message {
+                // sent by interface
+                Message::Reset => {
+                    clock_tx.send(clock::Message::Reset).unwrap();
+                },
+                // sent by interface
+                Message::NudgeTempo(nudge) => {
+                    clock_tx.send(clock::Message::NudgeTempo(nudge)).unwrap();
+                },
+                // sent by interface
+                Message::Tap => {
+                    clock_tx.send(clock::Message::Tap).unwrap();
+                },
+                // sent by clock
+                Message::Signature(signature) => {
+                    clock_tx.send(clock::Message::Signature(signature)).unwrap();
+                    terminal_tx.send(interface::Message::Signature(signature)).unwrap();
+                },
+                // sent by clock
+                Message::Time(time) => {
+                    terminal_tx.send(interface::Message::Time(time)).unwrap();
+                },
+                _ => {}
+            }
+        }
+    }
+}
