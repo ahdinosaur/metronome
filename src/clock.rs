@@ -178,52 +178,57 @@ impl Clock {
                 metronome_tx.send(metronome::Message::Time(clock.time())).unwrap();
 
                 // handle any incoming messages
-                let message_result = rx.try_recv();
-                match message_result {
-                    Ok(Message::Reset) => {
-                        clock.reset();
-                    },
-                    Ok(Message::Signature(signature)) => {
-                        clock.signature = signature;
-                    },
-                    Ok(Message::Tap) => {
-                        // find how far off the beat we are
-                        let time = clock.time();
-                        let nanos_since_beat = time.nanos_since_beat();
-                        let nanos_per_beat = time.signature.nanos_per_beat();
-                        let nanos_per_half_beat = time.signature.nanos_per_beat() / 2;
-                        // if the beat happened recently
-                        if nanos_since_beat < nanos_per_half_beat {
-                            // nudge back to the beat
-                            clock.nanos = time.nanos - nanos_since_beat
-                        } else {
-                            // nudge to the next beat
-                            clock.nanos = time.nanos + nanos_per_beat - nanos_since_beat
-                        }
+                let mut is_empty = false;
+                while !is_empty {
+                    let message_result = rx.try_recv();
+                    match message_result {
+                        Ok(Message::Reset) => {
+                            clock.reset();
+                        },
+                        Ok(Message::Signature(signature)) => {
+                            clock.signature = signature;
+                        },
+                        Ok(Message::Tap) => {
+                            // find how far off the beat we are
+                            let time = clock.time();
+                            let nanos_since_beat = time.nanos_since_beat();
+                            let nanos_per_beat = time.signature.nanos_per_beat();
+                            let nanos_per_half_beat = time.signature.nanos_per_beat() / 2;
+                            // if the beat happened recently
+                            if nanos_since_beat < nanos_per_half_beat {
+                                // nudge back to the beat
+                                clock.nanos = time.nanos - nanos_since_beat
+                            } else {
+                                // nudge to the next beat
+                                clock.nanos = time.nanos + nanos_per_beat - nanos_since_beat
+                            }
 
-                        // if second tap on beat, adjust tempo
-                        match clock.tap {
-                            Some(tap) => {
-                                let tap_diff = duration_to_nanos(tap.elapsed());
-                                if tap_diff < (nanos_per_beat * 2) {
-                                    let next_signature = Signature::new(tap_diff);
-                                    metronome_tx.send(metronome::Message::Signature(next_signature));
-                                }
-                            },
-                            None => {}
-                        }
+                            // if second tap on beat, adjust tempo
+                            match clock.tap {
+                                Some(tap) => {
+                                    let tap_diff = duration_to_nanos(tap.elapsed());
+                                    if tap_diff < (nanos_per_beat * 2) {
+                                        let next_signature = Signature::new(tap_diff);
+                                        metronome_tx.send(metronome::Message::Signature(next_signature));
+                                    }
+                                },
+                                None => {}
+                            }
 
-                        clock.tap = Some(Instant::now());
-                    },
-                    Ok(Message::NudgeTempo(nudge)) => {
-                        let old_beats_per_minute = clock.signature.to_beats_per_minute();
-                        let new_beats_per_minute = old_beats_per_minute + nudge;
-                        let next_signature = Signature::from_beats_per_minute(new_beats_per_minute);
-                        metronome_tx.send(metronome::Message::Signature(next_signature));
-                    },
-                    Err(TryRecvError::Empty) => {},
-                    Err(TryRecvError::Disconnected) => {
-                        panic!("{:?}", TryRecvError::Disconnected);
+                            clock.tap = Some(Instant::now());
+                        },
+                        Ok(Message::NudgeTempo(nudge)) => {
+                            let old_beats_per_minute = clock.signature.to_beats_per_minute();
+                            let new_beats_per_minute = old_beats_per_minute + nudge;
+                            let next_signature = Signature::from_beats_per_minute(new_beats_per_minute);
+                            metronome_tx.send(metronome::Message::Signature(next_signature));
+                        },
+                        Err(TryRecvError::Empty) => {
+                            is_empty = true;
+                        },
+                        Err(TryRecvError::Disconnected) => {
+                            panic!("{:?}", TryRecvError::Disconnected);
+                        }
                     }
                 }
             }
