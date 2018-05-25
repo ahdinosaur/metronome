@@ -20,6 +20,7 @@ impl Terminal {
         let (tx, rx) = channel();
 
         let mut signature = clock::Signature::default();
+        let mut tempo = 0_f64;
 
         spawn(move|| {
             /* Setup ncurses. */
@@ -87,7 +88,10 @@ impl Terminal {
                     },
                     Message::Signature(next_signature) => {
                         signature = next_signature;
-                    }
+                    },
+                    Message::Tempo(next_tempo) => {
+                        tempo = next_tempo;
+                    },
                 }
 
                 ncurses::refresh();
@@ -99,8 +103,8 @@ impl Terminal {
 }
 
 pub fn print_beat (time: clock::Time) {
-    if time.ticks() == 0 {
-        if time.beats() == 0 {
+    if time.ticks() as u64 == 0 {
+        if time.beats() as u64 == 0 {
             ncurses::printw("SUPER ");
         }
         ncurses::printw("BEAT");
@@ -109,26 +113,22 @@ pub fn print_beat (time: clock::Time) {
 }
 
 pub fn print_bar (time: clock::Time) {
-    if time.bars() == 0 {
+    if time.bars() as u64 == 0 {
         ncurses::printw("YAY YAY YAY");
     }
     ncurses::printw("\n");
 }
 
 pub fn print_time (time: clock::Time) {
-    ncurses::printw("nanos: ");
-    ncurses::printw(format!("{}\n", time.nanos()).as_ref());
     ncurses::printw("ticks: ");
-    ncurses::printw(format!("{}\n", time.ticks() + 1).as_ref());
+    ncurses::printw(format!("{}\n", time.ticks()).as_ref());
     ncurses::printw("beats: ");
-    ncurses::printw(format!("{}\n", time.beats() + 1).as_ref());
+    ncurses::printw(format!("{}\n", time.beats()).as_ref());
     ncurses::printw("bars: ");
-    ncurses::printw(format!("{}\n", time.bars() + 1).as_ref());
+    ncurses::printw(format!("{}\n", time.bars()).as_ref());
 }
 
 pub fn print_signature (signature: clock::Signature) {
-    ncurses::printw("beats per minute: ");
-    ncurses::printw(format!("{}\n", signature.to_beats_per_minute()).as_ref());
     ncurses::printw("ticks per beat: ");
     ncurses::printw(format!("{}\n", signature.ticks_per_beat).as_ref());
     ncurses::printw("beats per bar: ");
@@ -137,8 +137,14 @@ pub fn print_signature (signature: clock::Signature) {
     ncurses::printw(format!("{}\n", signature.bars_per_loop).as_ref());
 }
 
+pub fn print_tempo (tempo: clock::Tempo) {
+    ncurses::printw("beats per minute: ");
+    ncurses::printw(format!("{}\n", tempo).as_ref());
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum Message {
     Time(clock::Time),
     Signature(clock::Signature),
+    Tempo(clock::Tempo),
 }

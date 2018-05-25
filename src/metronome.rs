@@ -3,12 +3,11 @@ use std::sync::mpsc::{channel, Sender, Receiver};
 use clock;
 use interface;
 
-pub type Tempo = f64;
-
 #[derive(Clone, Copy, Debug)]
 pub enum Message {
     Time(clock::Time),
     Signature(clock::Signature),
+    Tempo(clock::Tempo),
     Reset,
     NudgeTempo(f64),
     Tap,
@@ -57,6 +56,11 @@ impl Metronome {
                 Message::Signature(signature) => {
                     clock_tx.send(clock::Message::Signature(signature)).unwrap();
                     terminal_tx.send(interface::Message::Signature(signature)).unwrap();
+                },
+                // sent by clock
+                Message::Tempo(tempo) => {
+                    clock_tx.send(clock::Message::Tempo(tempo)).unwrap();
+                    terminal_tx.send(interface::Message::Tempo(tempo)).unwrap();
                 },
                 // sent by clock
                 Message::Time(time) => {
