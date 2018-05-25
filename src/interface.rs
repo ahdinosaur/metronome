@@ -85,6 +85,7 @@ impl Terminal {
                         print_bar(time);
                         print_time(time);
                         print_signature(signature);
+                        print_tempo(tempo);
                     },
                     Message::Signature(next_signature) => {
                         signature = next_signature;

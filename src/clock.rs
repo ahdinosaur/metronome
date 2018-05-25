@@ -122,9 +122,35 @@ impl Time {
         self.signature.ticks_to_loops(self.ticks)
     }
 
+    pub fn ticks_since_beat (&self) -> Ticks {
+        self.ticks % self.signature.ticks_per_beat()
+    }
+
+    pub fn ticks_before_beat (&self) -> Ticks {
+        self.ticks - self.ticks_since_beat()
+    }
+
     pub fn next (&self) -> Self {
         Self {
             ticks: self.ticks + 1,
+            signature: self.signature
+        }
+    }
+
+    pub fn quantize_beat (&self) -> Self {
+        // find how far off the beat we are
+        let ticks_per_beat = self.signature.ticks_per_beat();
+        let ticks_per_half_beat = ticks_per_beat / 2;
+
+        Self {
+            // if the beat happened recently
+            ticks: if self.ticks_since_beat() < ticks_per_half_beat {
+                // nudge back to the beat
+                self.ticks_before_beat()
+            } else {
+                // nudge to the next beat
+                self.ticks_before_beat() + ticks_per_beat
+            },
             signature: self.signature
         }
     }
@@ -240,40 +266,15 @@ impl Clock {
                             clock.set_signature(signature);
                         },
                         Ok(Message::Tap) => {
-                            /*
-                            // find how far off the beat we are
-                            let time = clock.time();
-                            let nanos_since_beat = time.nanos_since_beat();
-                            let nanos_per_beat = time.signature.nanos_per_beat();
-                            let nanos_per_half_beat = time.signature.nanos_per_beat() / 2;
-                            // if the beat happened recently
-                            if nanos_since_beat < nanos_per_half_beat {
-                                // nudge back to the beat
-                                clock.nanos = time.nanos - nanos_since_beat
-                            } else {
-                                // nudge to the next beat
-                                clock.nanos = time.nanos + nanos_per_beat - nanos_since_beat
+                            if let Some(new_tempo) = clock.tap() {
+                                metronome_tx.send(metronome::Message::Tempo(new_tempo)).unwrap();
                             }
-
-                            // if second tap on beat, adjust tempo
-                            match clock.tap {
-                                Some(tap) => {
-                                    let tap_diff = duration_to_nanos(tap.elapsed());
-                                    if tap_diff < (nanos_per_beat * 2) {
-                                        let next_signature = Signature::new(tap_diff);
-                                        metronome_tx.send(metronome::Message::Signature(next_signature));
-                                    }
-                                },
-                                None => {}
-                            }
-
-                            clock.tap = Some(Instant::now());
-                            */
+                            
                         },
                         Ok(Message::NudgeTempo(nudge)) => {
                             let old_tempo = clock.tempo;
                             let new_tempo = old_tempo + nudge;
-                            metronome_tx.send(metronome::Message::Tempo(new_tempo));
+                            metronome_tx.send(metronome::Message::Tempo(new_tempo)).unwrap();
                         },
                         Ok(Message::Tempo(tempo)) => {
                             clock.tempo = tempo;
@@ -311,6 +312,28 @@ impl Clock {
         let nanos_until_tick = self.timer.next(self.tempo);
         self.time = self.time.next();
         nanos_until_tick
+    }
+
+    pub fn tap (&mut self) -> Option<Tempo> {
+        // on every tap, quantize beat
+        self.time = self.time.quantize_beat();
+
+        let mut next_tempo = None;
+
+        // if second tap on beat, adjust tempo
+        if let Some(tap) = self.tap {
+            let tap_nanos = duration_to_nanos(tap.elapsed());
+            if tap_nanos < self.signature.nanos_per_beat(self.tempo) * 2 {
+                let tap_beats_per_nanos = (1_f64 / tap_nanos as f64);
+                let tap_beats_per_seconds = tap_beats_per_nanos * NANOS_PER_SECOND as f64;
+                let beats_per_minute = tap_beats_per_seconds * SECONDS_PER_MINUTE as f64;
+                next_tempo = Some(beats_per_minute);
+            }
+        }
+
+        self.tap = Some(Instant::now());
+
+        next_tempo
     }
 }
 
