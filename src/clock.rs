@@ -118,16 +118,20 @@ impl Time {
         self.signature.ticks_to_bars(self.ticks)
     }
 
-    pub fn loops (&self) -> f64 {
-        self.signature.ticks_to_loops(self.ticks)
+    pub fn ticks_since_beat (&self) -> Ticks {
+        self.ticks() % self.signature.ticks_per_beat
     }
 
-    pub fn ticks_since_beat (&self) -> Ticks {
-        self.ticks % self.signature.ticks_per_beat()
+    pub fn beats_since_bar (&self) -> f64 {
+        self.beats() % self.signature.beats_per_bar as f64
+    }
+
+    pub fn bars_since_loop (&self) -> f64 {
+        self.bars() % self.signature.bars_per_loop as f64
     }
 
     pub fn ticks_before_beat (&self) -> Ticks {
-        self.ticks - self.ticks_since_beat()
+        self.ticks() - self.ticks_since_beat()
     }
 
     pub fn next (&self) -> Self {

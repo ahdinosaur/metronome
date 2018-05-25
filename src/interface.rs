@@ -104,8 +104,8 @@ impl Terminal {
 }
 
 pub fn print_beat (time: clock::Time) {
-    if time.ticks() as u64 == 0 {
-        if time.beats() as u64 == 0 {
+    if time.ticks_since_beat() as u64 == 0 {
+        if time.beats_since_bar() as u64 == 0 {
             ncurses::printw("SUPER ");
         }
         ncurses::printw("BEAT");
@@ -114,19 +114,19 @@ pub fn print_beat (time: clock::Time) {
 }
 
 pub fn print_bar (time: clock::Time) {
-    if time.bars() as u64 == 0 {
+    if time.bars_since_loop() as u64 == 0 {
         ncurses::printw("YAY YAY YAY");
     }
     ncurses::printw("\n");
 }
 
 pub fn print_time (time: clock::Time) {
-    ncurses::printw("ticks: ");
-    ncurses::printw(format!("{}\n", time.ticks()).as_ref());
-    ncurses::printw("beats: ");
-    ncurses::printw(format!("{}\n", time.beats()).as_ref());
-    ncurses::printw("bars: ");
-    ncurses::printw(format!("{}\n", time.bars()).as_ref());
+    ncurses::printw("ticks since beat: ");
+    ncurses::printw(format!("{}\n", time.ticks_since_beat()).as_ref());
+    ncurses::printw("beats since bar: ");
+    ncurses::printw(format!("{}\n", time.beats_since_bar()).as_ref());
+    ncurses::printw("bars since loop: ");
+    ncurses::printw(format!("{}\n", time.bars_since_loop()).as_ref());
 }
 
 pub fn print_signature (signature: clock::Signature) {
