@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use std::thread::{sleep, spawn};
 use std::sync::mpsc::{channel, Sender, TryRecvError};
 use num::rational::Ratio;
+use num::integer::Integer;
 
 use metronome;
 
@@ -348,7 +349,7 @@ impl Clock {
                 let tap_beats_per_nanos = Ratio::from_integer(1) / tap_nanos;
                 let tap_beats_per_seconds = tap_beats_per_nanos * Ratio::from_integer(NANOS_PER_SECOND);
                 let beats_per_minute = tap_beats_per_seconds * Ratio::from_integer(SECONDS_PER_MINUTE);
-                next_tempo = Some(beats_per_minute);
+                next_tempo = Some(round_to_nearest(beats_per_minute, 100));
             }
         }
 
@@ -360,4 +361,9 @@ impl Clock {
 
 fn duration_to_nanos (duration: Duration) -> i64 {
     duration.as_secs() as i64 * 1_000_000_000 + duration.subsec_nanos() as i64
+}
+
+fn round_to_nearest<T: Clone + Copy + Integer> (value: Ratio<T>, quantum: T) -> Ratio<T> {
+    let quantum_rat = Ratio::from_integer(quantum);
+    (value * quantum_rat).round() / quantum_rat
 }
