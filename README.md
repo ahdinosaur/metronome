@@ -1,4 +1,4 @@
-# metronome
+# metronome ⏰ 🥁
 
 a simple metronome in rust
 
