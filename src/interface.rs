@@ -3,6 +3,7 @@ extern crate ncurses;
 use ncurses::{WchResult};
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::thread::{sleep, spawn};
+use num::rational::Ratio;
 
 use clock;
 use metronome;
@@ -20,7 +21,7 @@ impl Terminal {
         let (tx, rx) = channel();
 
         let mut signature = clock::Signature::default();
-        let mut tempo = 0_f64;
+        let mut tempo = Ratio::from_integer(0);
 
         spawn(move|| {
             /* Setup ncurses. */
@@ -44,11 +45,13 @@ impl Terminal {
                     }
 
                     Some(WchResult::KeyCode(ncurses::KEY_UP)) => {
-                        metronome_tx.send(metronome::Message::NudgeTempo(1_f64)).unwrap();
+                        let up = Ratio::from_integer(1);
+                        metronome_tx.send(metronome::Message::NudgeTempo(up)).unwrap();
                     }
 
                     Some(WchResult::KeyCode(ncurses::KEY_DOWN)) => {
-                        metronome_tx.send(metronome::Message::NudgeTempo(-1_f64)).unwrap();
+                        let down = Ratio::from_integer(-1);
+                        metronome_tx.send(metronome::Message::NudgeTempo(down)).unwrap();
                     }
 
                     // https://github.com/jeaye/ncurses-rs/blob/master/src/constants.rs
@@ -104,8 +107,8 @@ impl Terminal {
 }
 
 pub fn print_beat (time: clock::Time) {
-    if time.ticks_since_beat() as u64 == 0 {
-        if time.beats_since_bar() as u64 == 0 {
+    if time.is_first_tick() {
+        if time.is_first_beat() {
             ncurses::printw("SUPER ");
         }
         ncurses::printw("BEAT");
@@ -114,7 +117,7 @@ pub fn print_beat (time: clock::Time) {
 }
 
 pub fn print_bar (time: clock::Time) {
-    if time.bars_since_loop() as u64 == 0 {
+    if time.is_first_bar() {
         ncurses::printw("YAY YAY YAY");
     }
     ncurses::printw("\n");

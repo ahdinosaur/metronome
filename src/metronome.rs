@@ -9,7 +9,7 @@ pub enum Message {
     Signature(clock::Signature),
     Tempo(clock::Tempo),
     Reset,
-    NudgeTempo(f64),
+    NudgeTempo(clock::Tempo),
     Tap,
     /*
     Stop,

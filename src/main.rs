@@ -1,4 +1,5 @@
 extern crate ncurses;
+extern crate num;
 
 use std::sync::mpsc::{channel, Sender, Receiver};
 
