@@ -143,7 +143,7 @@ pub fn print_signature (signature: clock::Signature) {
 
 pub fn print_tempo (tempo: clock::Tempo) {
     ncurses::printw("beats per minute: ");
-    ncurses::printw(format!("{}\n", tempo).as_ref());
+    ncurses::printw(format!("{}\n", tempo.to_integer()).as_ref());
 }
 
 #[derive(Clone, Copy, Debug)]

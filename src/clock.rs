@@ -9,23 +9,23 @@ use num::rational::{Ratio, Rational};
 
 use metronome;
 
-//pub type Number = Ratio<u64>;
-pub type Number = Rational;
-pub type Tempo = Number;
+pub type Tick = Ratio<i64>;
+pub type Tempo = Ratio<i64>;
+pub type NudgeTempo = Ratio<i64>;
 
-static SECONDS_PER_MINUTE: isize = 60;
-static NANOS_PER_SECOND: isize = 1_000_000_000;
-static BEATS_PER_MINUTE: isize = 60;
-static DEFAULT_TICKS_PER_BEAT: isize = 16;
-static DEFAULT_BEATS_PER_BAR: isize = 4;
-static DEFAULT_BARS_PER_LOOP: isize = 4;
-static DEFAULT_BEATS_PER_MINUTE: isize = 60;
+static SECONDS_PER_MINUTE: i64 = 60;
+static NANOS_PER_SECOND: i64 = 1_000_000_000;
+static BEATS_PER_MINUTE: i64 = 60;
+static DEFAULT_TICKS_PER_BEAT: i64 = 16;
+static DEFAULT_BEATS_PER_BAR: i64 = 4;
+static DEFAULT_BARS_PER_LOOP: i64 = 4;
+static DEFAULT_BEATS_PER_MINUTE: i64 = 60;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Signature {
-    pub ticks_per_beat: Number,
-    pub beats_per_bar: Number,
-    pub bars_per_loop: Number,
+    pub ticks_per_beat: Tick,
+    pub beats_per_bar: Tick,
+    pub bars_per_loop: Tick,
 }
 
 impl Signature {
@@ -37,31 +37,31 @@ impl Signature {
         }
     }
 
-    pub fn ticks_per_beat (&self) -> Number {
+    pub fn ticks_per_beat (&self) -> Tick {
         self.ticks_per_beat
     }
 
-    pub fn ticks_per_bar (&self) -> Number {
+    pub fn ticks_per_bar (&self) -> Tick {
         self.ticks_per_beat() * self.beats_per_bar
     }
 
-    pub fn ticks_per_loop (&self) -> Number {
+    pub fn ticks_per_loop (&self) -> Tick {
         self.ticks_per_bar() * self.bars_per_loop
     }
 
-    pub fn ticks_to_beats (&self, ticks: Number) -> Number {
+    pub fn ticks_to_beats (&self, ticks: Tick) -> Tick {
         ticks / self.ticks_per_beat
     }
 
-    pub fn ticks_to_bars (&self, ticks: Number) -> Number {
+    pub fn ticks_to_bars (&self, ticks: Tick) -> Tick {
         self.ticks_to_beats(ticks) / self.beats_per_bar
     }
 
-    pub fn ticks_to_loops (&self, ticks: Number) -> Number {
+    pub fn ticks_to_loops (&self, ticks: Tick) -> Tick {
         self.ticks_to_bars(ticks) / self.bars_per_loop
     }
 
-    pub fn nanos_per_tick (&self, beats_per_minute: Number) -> Number {
+    pub fn nanos_per_tick (&self, beats_per_minute: Tick) -> Tick {
         let minutes_per_beat = Ratio::from_integer(1) / beats_per_minute;
         let seconds_per_beat = minutes_per_beat * Ratio::from_integer(SECONDS_PER_MINUTE);
         let nanos_per_beat = seconds_per_beat * Ratio::from_integer(NANOS_PER_SECOND);
@@ -69,19 +69,19 @@ impl Signature {
         nanos_per_tick
     }
 
-    pub fn nanos_per_beat (&self, beats_per_minute: Number) -> Number {
+    pub fn nanos_per_beat (&self, beats_per_minute: Tick) -> Tick {
         self.nanos_per_tick(beats_per_minute) * self.ticks_per_beat
     }
 
-    pub fn nanos_per_bar (&self, beats_per_minute: Number) -> Number {
+    pub fn nanos_per_bar (&self, beats_per_minute: Tick) -> Tick {
         self.nanos_per_beat(beats_per_minute) * self.beats_per_bar
     }
 
-    pub fn nanos_per_loop (&self, beats_per_minute: Number) -> Number {
+    pub fn nanos_per_loop (&self, beats_per_minute: Tick) -> Tick {
         self.nanos_per_bar(beats_per_minute) * self.bars_per_loop
     }
 
-    pub fn beats_per_minute (&self, nanos_per_tick: Number) -> Tempo {
+    pub fn beats_per_minute (&self, nanos_per_tick: Tick) -> Tempo {
         let nanos_per_beat = nanos_per_tick * self.ticks_per_beat;
         let beats_per_nano = Ratio::from_integer(1) / nanos_per_beat;
         let beats_per_second = beats_per_nano * Ratio::from_integer(NANOS_PER_SECOND);
@@ -92,7 +92,7 @@ impl Signature {
 
 #[derive(Clone, Copy, Debug)]
 pub struct Time {
-    ticks: Number,
+    ticks: Tick,
     signature: Signature
 }
 
@@ -104,31 +104,31 @@ impl Time {
         }
     }
 
-    pub fn ticks (&self) -> Number {
+    pub fn ticks (&self) -> Tick {
         self.ticks
     }
 
-    pub fn beats (&self) -> Number {
+    pub fn beats (&self) -> Tick {
         self.signature.ticks_to_beats(self.ticks)
     }
 
-    pub fn bars (&self) -> Number {
+    pub fn bars (&self) -> Tick {
         self.signature.ticks_to_bars(self.ticks)
     }
 
-    pub fn ticks_since_beat (&self) -> Number {
+    pub fn ticks_since_beat (&self) -> Tick {
         self.ticks() % self.signature.ticks_per_beat
     }
 
-    pub fn beats_since_bar (&self) -> Number {
+    pub fn beats_since_bar (&self) -> Tick {
         self.beats() % self.signature.beats_per_bar
     }
 
-    pub fn bars_since_loop (&self) -> Number {
+    pub fn bars_since_loop (&self) -> Tick {
         self.bars() % self.signature.bars_per_loop
     }
 
-    pub fn ticks_before_beat (&self) -> Number {
+    pub fn ticks_before_beat (&self) -> Tick {
         self.ticks() - self.ticks_since_beat()
     }
 
@@ -184,33 +184,33 @@ impl Timer {
         }
     }
 
-    pub fn nanos (&self) -> Number {
+    pub fn nanos (&self) -> Tick {
         Ratio::from_integer(duration_to_nanos(self.instant.elapsed()))
     }
 
-    pub fn nanos_since_tick (&self, beats_per_minute: Number) -> Number {
+    pub fn nanos_since_tick (&self, beats_per_minute: Tick) -> Tick {
         self.nanos() % self.signature.nanos_per_tick(beats_per_minute)
     }
 
-    pub fn nanos_since_beat (&self, beats_per_minute: Number) -> Number {
+    pub fn nanos_since_beat (&self, beats_per_minute: Tick) -> Tick {
         self.nanos() % self.signature.nanos_per_beat(beats_per_minute)
     }
 
-    pub fn nanos_since_bar (&self, beats_per_minute: Number) -> Number {
+    pub fn nanos_since_bar (&self, beats_per_minute: Tick) -> Tick {
         self.nanos() % self.signature.nanos_per_bar(beats_per_minute)
     }
 
-    pub fn nanos_since_loop (&self, beats_per_minute: Number) -> Number {
+    pub fn nanos_since_loop (&self, beats_per_minute: Tick) -> Tick {
         self.nanos() % self.signature.nanos_per_loop(beats_per_minute)
     }
 
-    pub fn nanos_until_tick (&self, beats_per_minute: Number) -> Number {
+    pub fn nanos_until_tick (&self, beats_per_minute: Tick) -> Tick {
         let nanos_since_tick = self.nanos_since_tick(beats_per_minute);
         let nanos_per_tick = self.signature.nanos_per_tick(beats_per_minute);
         nanos_per_tick - nanos_since_tick
     }
 
-    pub fn next (&self, beats_per_minute: Number) -> Number {
+    pub fn next (&self, beats_per_minute: Tick) -> Tick {
         let nanos_until_tick = self.nanos_until_tick(beats_per_minute);
 
         let nanos = nanos_until_tick.numer() / nanos_until_tick.denom();
@@ -232,7 +232,7 @@ pub struct Clock {
 
 pub enum Message {
     Tempo(Tempo),
-    NudgeTempo(Number),
+    NudgeTempo(NudgeTempo),
     Reset,
     Signature(Signature),
     Tap,
@@ -267,9 +267,6 @@ impl Clock {
                 // wait a tick
                 let diff = clock.tick();
 
-                // send clock time
-                metronome_tx.send(metronome::Message::Time(clock.time())).unwrap();
-
                 // handle any incoming messages
                 let mut is_empty = false;
                 while !is_empty {
@@ -303,6 +300,9 @@ impl Clock {
                         }
                     }
                 }
+
+                // send clock time
+                metronome_tx.send(metronome::Message::Time(clock.time())).unwrap();
             }
         });
 
@@ -324,7 +324,7 @@ impl Clock {
         self.time
     }
 
-    pub fn tick (&mut self) -> Number {
+    pub fn tick (&mut self) -> Tick {
         let nanos_until_tick = self.timer.next(self.tempo);
         self.time = self.time.next();
         nanos_until_tick
@@ -340,7 +340,7 @@ impl Clock {
         if let Some(tap) = self.tap {
             let tap_nanos = Ratio::from_integer(duration_to_nanos(tap.elapsed()));
             if tap_nanos < self.signature.nanos_per_beat(self.tempo) * 2 {
-                let tap_beats_per_nanos = tap_nanos;
+                let tap_beats_per_nanos = Ratio::from_integer(1) / tap_nanos;
                 let tap_beats_per_seconds = tap_beats_per_nanos * Ratio::from_integer(NANOS_PER_SECOND);
                 let beats_per_minute = tap_beats_per_seconds * Ratio::from_integer(SECONDS_PER_MINUTE);
                 next_tempo = Some(beats_per_minute);
@@ -353,6 +353,6 @@ impl Clock {
     }
 }
 
-fn duration_to_nanos (duration: Duration) -> isize {
-    duration.as_secs() as isize * 1_000_000_000 as isize + duration.subsec_nanos() as isize
+fn duration_to_nanos (duration: Duration) -> i64 {
+    duration.as_secs() as i64 * 1_000_000_000 + duration.subsec_nanos() as i64
 }
