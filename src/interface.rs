@@ -1,5 +1,4 @@
-extern crate ncurses;
-
+use ncurses;
 use ncurses::{WchResult};
 use std::sync::mpsc::{channel, Sender};
 use std::thread::spawn;
@@ -86,8 +85,6 @@ impl Terminal {
                     Message::Time(time) => {
                         ncurses::clear();
                         ncurses::mv(0, 0);
-                        print_beat(time);
-                        print_bar(time);
                         print_time(time);
                         print_signature(signature);
                         print_tempo(tempo);
@@ -108,30 +105,42 @@ impl Terminal {
     }
 }
 
-pub fn print_beat (time: clock::Time) {
-    if time.is_first_tick() {
-        if time.is_first_beat() {
-            ncurses::printw("SUPER ");
-        }
-        ncurses::printw("BEAT");
-    }
-    ncurses::printw("\n");
-}
-
-pub fn print_bar (time: clock::Time) {
-    if time.is_first_bar() {
-        ncurses::printw("YAY YAY YAY");
-    }
-    ncurses::printw("\n");
-}
-
 pub fn print_time (time: clock::Time) {
     ncurses::printw("ticks since beat: ");
-    ncurses::printw(format!("{}\n", time.ticks_since_beat()).as_ref());
+    let ticks_since_beat = time.ticks_since_beat();
+    ncurses::printw(format!("{}\n", ticks_since_beat).as_ref());
+    if ticks_since_beat.to_integer() == 0 {
+        ncurses::printw("BEAT");
+    } else {
+        for i in 0..ticks_since_beat.to_integer() {
+            ncurses::printw("-");
+        }
+    }
+    ncurses::printw("\n");
+
     ncurses::printw("beats since bar: ");
-    ncurses::printw(format!("{}\n", time.beats_since_bar()).as_ref());
+    let beats_since_bar = time.beats_since_bar();
+    ncurses::printw(format!("{}\n", beats_since_bar).as_ref());
+    if beats_since_bar.to_integer() == 0 {
+        ncurses::printw("BAR");
+    } else {
+        for i in 0..beats_since_bar.to_integer() {
+            ncurses::printw("X");
+        }
+    }
+    ncurses::printw("\n");
+
     ncurses::printw("bars since loop: ");
-    ncurses::printw(format!("{}\n", time.bars_since_loop()).as_ref());
+    let bars_since_loop = time.bars_since_loop();
+    ncurses::printw(format!("{}\n", bars_since_loop).as_ref());
+    if bars_since_loop.to_integer() == 0 {
+        ncurses::printw("LOOP");
+    } else {
+        for i in 0..bars_since_loop.to_integer() {
+            ncurses::printw("&");
+        }
+    }
+    ncurses::printw("\n");
 }
 
 pub fn print_signature (signature: clock::Signature) {
