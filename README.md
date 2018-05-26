@@ -2,8 +2,6 @@
 
 a simple metronome in rust
 
-_work in progress_
-
 ## usage
 
 [install rust](https://rustup.rs/)
