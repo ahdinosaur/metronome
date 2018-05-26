@@ -1,11 +1,10 @@
 // inspired by https://github.com/mmckegg/rust-loop-drop/blob/master/src/midi_time.rs
 // http://www.deluge.co/?q=midi-tempo-bpm
 
-use std::u64;
 use std::time::{Duration, Instant};
 use std::thread::{sleep, spawn};
-use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError};
-use num::rational::{Ratio, Rational};
+use std::sync::mpsc::{channel, Sender, TryRecvError};
+use num::rational::Ratio;
 
 use metronome;
 
@@ -15,7 +14,7 @@ pub type NudgeTempo = Ratio<i64>;
 
 static SECONDS_PER_MINUTE: i64 = 60;
 static NANOS_PER_SECOND: i64 = 1_000_000_000;
-static BEATS_PER_MINUTE: i64 = 60;
+
 static DEFAULT_TICKS_PER_BEAT: i64 = 16;
 static DEFAULT_BEATS_PER_BAR: i64 = 4;
 static DEFAULT_BARS_PER_LOOP: i64 = 4;
@@ -37,14 +36,17 @@ impl Signature {
         }
     }
 
+    #[allow(dead_code)]
     pub fn ticks_per_beat (&self) -> Tick {
         self.ticks_per_beat
     }
 
+    #[allow(dead_code)]
     pub fn ticks_per_bar (&self) -> Tick {
         self.ticks_per_beat() * self.beats_per_bar
     }
 
+    #[allow(dead_code)]
     pub fn ticks_per_loop (&self) -> Tick {
         self.ticks_per_bar() * self.bars_per_loop
     }
@@ -55,10 +57,6 @@ impl Signature {
 
     pub fn ticks_to_bars (&self, ticks: Tick) -> Tick {
         self.ticks_to_beats(ticks) / self.beats_per_bar
-    }
-
-    pub fn ticks_to_loops (&self, ticks: Tick) -> Tick {
-        self.ticks_to_bars(ticks) / self.bars_per_loop
     }
 
     pub fn nanos_per_tick (&self, beats_per_minute: Tick) -> Tick {
@@ -73,14 +71,17 @@ impl Signature {
         self.nanos_per_tick(beats_per_minute) * self.ticks_per_beat
     }
 
+    #[allow(dead_code)]
     pub fn nanos_per_bar (&self, beats_per_minute: Tick) -> Tick {
         self.nanos_per_beat(beats_per_minute) * self.beats_per_bar
     }
 
+    #[allow(dead_code)]
     pub fn nanos_per_loop (&self, beats_per_minute: Tick) -> Tick {
         self.nanos_per_bar(beats_per_minute) * self.bars_per_loop
     }
 
+    #[allow(dead_code)]
     pub fn beats_per_minute (&self, nanos_per_tick: Tick) -> Tempo {
         let nanos_per_beat = nanos_per_tick * self.ticks_per_beat;
         let beats_per_nano = Ratio::from_integer(1) / nanos_per_beat;
@@ -192,14 +193,17 @@ impl Timer {
         self.nanos() % self.signature.nanos_per_tick(beats_per_minute)
     }
 
+    #[allow(dead_code)]
     pub fn nanos_since_beat (&self, beats_per_minute: Tick) -> Tick {
         self.nanos() % self.signature.nanos_per_beat(beats_per_minute)
     }
 
+    #[allow(dead_code)]
     pub fn nanos_since_bar (&self, beats_per_minute: Tick) -> Tick {
         self.nanos() % self.signature.nanos_per_bar(beats_per_minute)
     }
 
+    #[allow(dead_code)]
     pub fn nanos_since_loop (&self, beats_per_minute: Tick) -> Tick {
         self.nanos() % self.signature.nanos_per_loop(beats_per_minute)
     }
@@ -265,6 +269,7 @@ impl Clock {
         spawn(move|| {
             loop {
                 // wait a tick
+                #[allow(unused_variables)]
                 let diff = clock.tick();
 
                 // handle any incoming messages

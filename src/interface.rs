@@ -1,8 +1,8 @@
 extern crate ncurses;
 
 use ncurses::{WchResult};
-use std::sync::mpsc::{channel, Sender, Receiver};
-use std::thread::{sleep, spawn};
+use std::sync::mpsc::{channel, Sender};
+use std::thread::spawn;
 use num::rational::Ratio;
 
 use clock;
@@ -10,6 +10,7 @@ use metronome;
 
 // https://unicode.org/charts/PDF/U0000.pdf
 static CHAR_SPACE: u32 = 0x0020;
+#[allow(dead_code)]
 static CHAR_RETURN: u32 = 0x000D;
 static CHAR_NEWLINE: u32 = 0x000A;
 
@@ -60,11 +61,11 @@ impl Terminal {
 
                     // Some(WchResult::KeyCode(KEY_ENTER)) => beat(),
                     Some(WchResult::Char(ch)) => {
-                        if (ch == CHAR_SPACE) {
+                        if ch == CHAR_SPACE {
                             metronome_tx.send(metronome::Message::Tap).unwrap();
                         }
 
-                        if (ch == CHAR_NEWLINE) {
+                        if ch == CHAR_NEWLINE {
                             metronome_tx.send(metronome::Message::Reset).unwrap();
                         }
                     }
@@ -75,6 +76,7 @@ impl Terminal {
                 ncurses::refresh();
             }
 
+            // TODO move to Drop trait
             ncurses::endwin();
         });
 

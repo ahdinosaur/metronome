@@ -65,8 +65,7 @@ impl Metronome {
                 // sent by clock
                 Message::Time(time) => {
                     terminal_tx.send(interface::Message::Time(time)).unwrap();
-                },
-                _ => {}
+                }
             }
         }
     }
